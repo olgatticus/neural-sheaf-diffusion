@@ -62,9 +62,12 @@ def test(model, data):
 
 
 def run_exp(args, dataset, model_cls, fold):
-    data = dataset[0]
-    data = get_fixed_splits(data, args['dataset'], fold)
-    data = data.to(args['device'])
+    if args["dataset"] == "custom":
+        data = dataset
+    else:
+        data = dataset[0]
+        data = get_fixed_splits(data, args['dataset'], fold)
+        data = data.to(args['device'])
 
     model = model_cls(data.edge_index, args)
     model = model.to(args['device'])
@@ -134,6 +137,9 @@ def run_exp(args, dataset, model_cls, fold):
 
     return test_acc, best_val_acc, keep_running
 
+def create_custom_dataset():
+    pass 
+
 
 if __name__ == '__main__':
     parser = get_parser()
@@ -157,15 +163,21 @@ if __name__ == '__main__':
     else:
         raise ValueError(f'Unknown model {args.model}')
 
-    dataset = get_dataset(args.dataset)
+    if args.dataset == "custom":
+        dataset = create_custom_dataset()
+        args.graph_size = dataset.x.size(0)
+        args.input_dim = dataset.num_features
+        args.output_dim = 8
+    else:
+        dataset = get_dataset(args.dataset)
+        args.graph_size = dataset[0].x.size(0)
+        args.input_dim = dataset.num_features
+        args.output_dim = dataset.num_classes
     if args.evectors > 0:
         dataset = append_top_k_evectors(dataset, args.evectors)
 
     # Add extra arguments
     args.sha = sha
-    args.graph_size = dataset[0].x.size(0)
-    args.input_dim = dataset.num_features
-    args.output_dim = dataset.num_classes
     args.device = torch.device(f'cuda:{args.cuda}' if torch.cuda.is_available() else 'cpu')
     assert args.normalised or args.deg_normalised
     if args.sheaf_decay is None:
