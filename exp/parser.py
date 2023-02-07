@@ -57,6 +57,7 @@ def get_parser():
 
     # Experiment parameters
     parser.add_argument('--dataset', default='texas')
+    parser.add_argument('--inter_edges', default= 350)
     parser.add_argument('--seed', type=int, default=43)
     parser.add_argument('--cuda', type=int, default=0)
     parser.add_argument('--folds', type=int, default=10)

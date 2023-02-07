@@ -11,6 +11,10 @@ import git
 import numpy as np
 import wandb
 from tqdm import tqdm
+from torch_geometric.utils.convert import from_networkx
+#from torch_geometric.data import to_heterogenous 
+import dgl
+from dgl.data import BACommunityDataset
 
 # This is required here by wandb sweeps.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -137,8 +141,44 @@ def run_exp(args, dataset, model_cls, fold):
 
     return test_acc, best_val_acc, keep_running
 
-def create_custom_dataset():
-    pass 
+def create_custom_dataset(inter_edges):
+    dataset = BACommunityDataset(num_inter_edges=inter_edges)
+    dataset.process()
+
+    #print(dataset.num_classes)
+    g = dataset[0]
+    g = dgl.to_networkx(g, node_attrs = ["feat", "label"])
+    g = from_networkx(g)
+
+    # Definitions of node features and labels 
+    g.x = g.feat.float()
+    g.y = g.label
+
+    n_training = g.num_nodes // 100 * 60
+    n_test = g.num_nodes // 100 * 20
+    #print(n_test * 3)
+    split_list = torch.zeros(g.num_nodes)
+    split_list[n_training:n_training+n_test] = 1
+    split_list[n_training+n_test:] = 2
+    #print(sum(split_list))
+    #print(split_list[:30])
+    perm = torch.randperm(g.num_nodes)
+    split_list = split_list[perm[:]]
+    #print(sum(split_list))
+    #print(split_list[100:200])
+
+    mask_train = split_list == 0
+    mask_valid = split_list == 1
+    mask_test = split_list == 2
+    #mask_train = mask[perm[:]]
+    #mask_test = ~mask_train
+
+    # Training data
+    g.train_mask = mask_train
+    g.test_mask = mask_test
+    g.val_mask = mask_valid
+
+    return g
 
 
 if __name__ == '__main__':
@@ -164,7 +204,7 @@ if __name__ == '__main__':
         raise ValueError(f'Unknown model {args.model}')
 
     if args.dataset == "custom":
-        dataset = create_custom_dataset()
+        dataset = create_custom_dataset(args.inter_edges)
         args.graph_size = dataset.x.size(0)
         args.input_dim = dataset.num_features
         args.output_dim = 8
